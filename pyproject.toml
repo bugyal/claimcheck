@@ -9,7 +9,7 @@ description = "Audit what an AI coding agent claims against what its diff and te
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
-authors = [{ name = "coding agent", email = "coding@localhost" }]
+authors = [{ name = "Ashish Bhatt" }]
 keywords = ["agents", "verification", "ci", "code-review", "llm", "testing"]
 classifiers = [
   "Development Status :: 3 - Alpha",
