@@ -13,12 +13,13 @@ No runtime dependencies. Python 3.11+.
 
 ```sh
 /opt/homebrew/bin/python3.13 -m venv .venv   # or any python3.11+
-.venv/bin/pip install -e .
+.venv/bin/pip install -e ".[dev]"            # [dev] adds pytest
 .venv/bin/claimcheck --help
 ```
 
 `python3` on macOS is often the 3.9 system build, which has no `tomllib` and a
-pip too old for editable installs — name a 3.11+ interpreter explicitly.
+pip too old for editable installs — name a 3.11+ interpreter explicitly. Drop
+the `[dev]` extra if you only want the CLI.
 
 ## Use
 
