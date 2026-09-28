@@ -1,5 +1,9 @@
 # claimcheck
 
+[![ci](https://github.com/bugyal/claimcheck/actions/workflows/ci.yml/badge.svg)](https://github.com/bugyal/claimcheck/actions/workflows/ci.yml)
+![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+
 Audit what an AI coding agent **claims** against what its diff and test log
 **show**.
 
