@@ -1,0 +1,140 @@
+name: claimcheck
+description: >-
+  Audit an agent run's report against its own diff and test log. Fails the job
+  when the report contradicts the evidence.
+author: coding agent
+
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  report:
+    description: Path to the agent's final report (markdown or text).
+    required: false
+    default: ""
+  diff:
+    description: Path to the unified diff. Defaults to the PR/base diff.
+    required: false
+    default: ""
+  test-log:
+    description: Path to a captured test-run log.
+    required: false
+    default: ""
+  test-exit-code:
+    description: >-
+      Exit status of the test command. Supply this when the command runs in the
+      same job; an exit code alone is enough to refute a "tests pass" claim.
+    required: false
+    default: ""
+  fail-on:
+    description: Severity that fails the job — info, suspicious, contradiction, or never.
+    required: false
+    default: suspicious
+  working-directory:
+    description: Directory to run in.
+    required: false
+    default: "."
+  python-version:
+    description: Python version used to run claimcheck.
+    required: false
+    default: "3.12"
+  post-comment:
+    description: Post the audit as a PR comment.
+    required: false
+    default: "false"
+
+outputs:
+  worst:
+    description: Highest severity found (info, suspicious, contradiction).
+    value: ${{ steps.run.outputs.worst }}
+  clean:
+    description: "true when no non-info finding and no refuted claim."
+    value: ${{ steps.run.outputs.clean }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install claimcheck
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        python -m pip install --quiet --upgrade pip
+        python -m pip install --quiet .
+
+    - name: Resolve the diff
+      id: diff
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_DIFF: ${{ inputs.diff }}
+        BASE_REF: ${{ github.base_ref }}
+      run: |
+        set -euo pipefail
+        if [ -n "$INPUT_DIFF" ]; then
+          printf 'path=%s\n' "$INPUT_DIFF" >> "$GITHUB_OUTPUT"
+        elif [ -n "$BASE_REF" ]; then
+          git fetch --no-tags --depth=50 origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" > "$RUNNER_TEMP/claimcheck.diff"
+          printf 'path=%s\n' "$RUNNER_TEMP/claimcheck.diff" >> "$GITHUB_OUTPUT"
+        else
+          git diff HEAD~1...HEAD > "$RUNNER_TEMP/claimcheck.diff" || true
+          printf 'path=%s\n' "$RUNNER_TEMP/claimcheck.diff" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Audit
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        INPUT_REPORT: ${{ inputs.report }}
+        INPUT_TEST_LOG: ${{ inputs.test-log }}
+        INPUT_TEST_EXIT_CODE: ${{ inputs.test-exit-code }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        DIFF_PATH: ${{ steps.diff.outputs.path }}
+        STEP_SUMMARY: ${{ runner.temp }}/claimcheck-summary.txt
+      run: |
+        # Deliberately no `set -e` around claimcheck: a non-zero exit is the
+        # finding we want to report, not a crash to abort on.
+        args=(--diff "$DIFF_PATH" --fail-on "$INPUT_FAIL_ON" --json)
+        [ -n "$INPUT_REPORT" ] && args+=(--report "$INPUT_REPORT")
+        [ -n "$INPUT_TEST_LOG" ] && args+=(--test-log "$INPUT_TEST_LOG")
+        [ -n "$INPUT_TEST_EXIT_CODE" ] && args+=(--test-exit-code "$INPUT_TEST_EXIT_CODE")
+
+        claimcheck "${args[@]}" > audit.json && status=0 || status=$?
+
+        python - <<'PY'
+        import json, os, pathlib
+        data = json.loads(pathlib.Path("audit.json").read_text())
+        worst = data.get("worst", "info")
+        clean = str(bool(data.get("clean"))).lower()
+        out = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+        with out.open("a") as fh:
+            fh.write(f"worst={worst}\nclean={clean}\n")
+        PY
+
+        claimcheck --diff "$DIFF_PATH" ${INPUT_REPORT:+--report "$INPUT_REPORT"} \
+                   ${INPUT_TEST_LOG:+--test-log "$INPUT_TEST_LOG"} > "$STEP_SUMMARY" || true
+        cat "$STEP_SUMMARY"
+        exit $status
+
+    - name: Post PR comment
+      if: ${{ always() && inputs.post-comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        {
+          echo '<!-- claimcheck -->'
+          echo '### claimcheck audit'
+          echo '```'
+          cat "${{ runner.temp }}/claimcheck-summary.txt"
+          echo '```'
+        } > "$RUNNER_TEMP/comment.md"
+        gh pr comment "${{ github.event.pull_request.number }}" \
+          --body-file "$RUNNER_TEMP/comment.md" --edit-last --create-if-none

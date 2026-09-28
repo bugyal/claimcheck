@@ -1,0 +1,18 @@
+diff --git a/src/pagination.py b/src/pagination.py
+index aaaaaaa..bbbbbbb 100644
+--- a/src/pagination.py
++++ b/src/pagination.py
+@@ -12,7 +12,7 @@ def paginate(items, page, size=DEFAULT_SIZE):
+-    start = (page - 1) * size + 1
++    start = (page - 1) * size
+     end = start + size
+     return items[start:end]
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+index 1111111..3333333 100644
+--- a/tests/test_pagination.py
++++ b/tests/test_pagination.py
+@@ -25,6 +25,9 @@ def test_last_page():
+     assert paginate(items, page=10) == items[90:]
++
++def test_empty_page_returns_empty():
++    assert paginate([], page=1) == []

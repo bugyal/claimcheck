@@ -1,0 +1,10 @@
+========= test session starts ==========
+collected 42 items
+
+tests/test_pagination.py ................................. [ 74%]
+tests/test_models.py .......... [100%]
+
+2 failed, 40 passed in 0.84s
+
+FAILED tests/test_pagination.py::test_last_page - AssertionError
+FAILED tests/test_models.py::test_roundtrip - ValueError

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "claimcheck"
+version = "0.1.0"
+description = "Audit what an AI coding agent claims against what its diff and test log show."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "coding agent", email = "coding@localhost" }]
+keywords = ["agents", "verification", "ci", "code-review", "llm", "testing"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+claimcheck = "claimcheck.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claimcheck"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
