@@ -178,6 +178,42 @@ def test_empty_diff_with_a_prose_report_is_a_contradiction():
     assert report.worst is Severity.CONTRADICTION
 
 
+def test_bugfix_claim_refuted_when_no_source_file_changed():
+    """A 'fixed' claim over a tests-only diff is contradicted, not supported."""
+
+    report = run(
+        diff_text=load("tests_only.diff"),
+        report_text=load("tests_only.report.md"),
+        log_text=load("passing.log"),
+    )
+    fixes = [c for c in report.checks if c.claim.kind == "bugfix"]
+    assert fixes
+    assert all(c.verdict is Verdict.REFUTED for c in fixes)
+    assert any("no source file changed" in c.reason for c in fixes)
+
+
+def test_bugfix_claim_is_unsupported_without_a_log_but_a_source_change():
+    report = run(
+        diff_text=load("honest_fix.diff"),
+        report_text="Fixed the issue in src/pagination.py.\n",
+        log_text="",
+    )
+    fixes = [c for c in report.checks if c.claim.kind == "bugfix"]
+    assert fixes
+    assert all(c.verdict is Verdict.UNSUPPORTED for c in fixes)
+
+
+def test_bugfix_claim_verified_with_source_change_and_green_log():
+    report = run(
+        diff_text=load("honest_fix.diff"),
+        report_text="Fixed the issue in src/pagination.py. All tests pass.\n",
+        log_text=load("passing.log"),
+    )
+    fixes = [c for c in report.checks if c.claim.kind == "bugfix"]
+    assert fixes
+    assert all(c.verdict is Verdict.VERIFIED for c in fixes)
+
+
 def test_no_functional_change_refuted_by_source_edits():
     report = run(
         diff_text=load("honest_fix.diff"),

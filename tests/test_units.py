@@ -141,6 +141,18 @@ def test_duplicate_claims_are_deduplicated():
     assert kinds.count("tests_pass") == 1
 
 
+def test_one_sentence_matching_two_patterns_is_one_claim():
+    """'59 tests passing' matches both the generic and counted patterns."""
+
+    cs = claims_mod.extract("Verified: 59 tests passing.\n")
+    sentences = [c.sentence for c in cs.claims]
+    assert len(sentences) == len(set(sentences)), f"duplicate sentences: {sentences}"
+    kinds = {c.kind for c in cs.claims}
+    # The more specific kind wins over the generic one.
+    assert "tests_pass_counted" in kinds
+    assert "tests_pass" not in kinds
+
+
 def test_distinct_claims_are_not_collapsed():
     """Two different sentences are two claims, even of the same kind."""
 

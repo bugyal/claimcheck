@@ -353,6 +353,16 @@ def _check_one(
     if kind == "bugfix":
         if not d.files:
             return ClaimCheck(claim, Verdict.UNSUPPORTED, "empty diff — nothing to attribute the fix to")
+        if not d.source_files:
+            # The whole point of the tool: a "fixed" claim over a diff that
+            # changes no product code is contradicted, not supported, however
+            # green the test log is.
+            return ClaimCheck(
+                claim,
+                Verdict.REFUTED,
+                "no source file changed — the diff only touches "
+                + (", ".join(f.path for f in d.test_files) if d.test_files else ", ".join(f.path for f in d.doc_files) or "non-source files"),
+            )
         if tests.observed_failure:
             return ClaimCheck(
                 claim,
@@ -362,7 +372,7 @@ def _check_one(
         return ClaimCheck(
             claim,
             Verdict.VERIFIED if tests.observed_success else Verdict.UNSUPPORTED,
-            f"diff changes {len(d.files)} file(s); " + (f"log shows {tests.summary()}" if has_log else "no log to confirm against"),
+            f"diff changes {len(d.source_files)} source file(s); " + (f"log shows {tests.summary()}" if has_log else "no log to confirm against"),
         )
 
     if kind == "clean_tree":

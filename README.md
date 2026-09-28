@@ -86,31 +86,92 @@ got done" pattern of a prose report over an empty diff.
 
 ## Example
 
+A run that claims a fix while only touching tests — the pattern that produces a
+false "passed":
+
 ```
 $ claimcheck --diff run.diff --report report.md --test-log pytest.log
-diff: 2 file(s), +5/-3 lines, 1 test file(s)
-report: 41 words, 4 sentences
-tests:  43 passed (pytest)
+diff: 1 file(s), +1/-1 lines, 1 test file(s)
+report: 9 words, 2 sentences
+tests:  12 passed
 
 changelog (diff-anchored):
-  [fix] src/pagination.py:L12  +1/-1
-  [test] tests/test_pagination.py:L25  +3/-0
+  [test] tests/test_app.py:L1-2  +1/-1
+
+claim audit:
+  REFUTED      Fixed the bug in f()
+               -> no source file changed — the diff only touches tests/test_app.py
+  verified     All tests pass.
+
+findings:
+  [CONTRADICTION ] only tests changed
+                   The diff touches test files and no source files. Nothing in
+                   the product changed, so any 'fixed' or 'passing' claim
+                   describes the checks, not the code.
+                   · tests/test_app.py
+  [SUSPICIOUS    ] test files edited in this run
+                   1 test file(s) changed: tests/test_app.py (modified, +1/-1)
+                   · tests/test_app.py: +1/-1 assertions
+
+verdict: WORST: CONTRADICTION (1 claim(s) refuted by evidence) | 2 non-info finding(s)
+```
+
+A clean run of the same fixtures, where the fix touched source and the log
+confirms it:
+
+```
+$ claimcheck --diff honest.diff --report honest.md --test-log passing.log
+diff: 2 file(s), +4/-1 lines, 1 test file(s)
+report: 49 words, 7 sentences
+tests:  43 passed
+
+changelog (diff-anchored):
+  [fix] src/pagination.py:def paginate(items, page, size=DEFAULT_SIZE): L12-18  +1/-1 (def paginate(items, page, size=DEFAULT_SIZE):)
+  [test] tests/test_pagination.py:def test_last_page(): L25-33  +3/-0 (def test_last_page():)
 
 claim audit:
   verified     Fixed the issue in src/pagination.py.
   verified     All tests pass.
-  verified     Added a regression test for the empty-page case.
 
 findings:
   [INFO          ] test files edited in this run
-                   1 test file(s) changed: tests/test_pagination.py +3/-0 assertions
+                   1 test file(s) changed: tests/test_pagination.py (modified, +3/-0)
 
-verdict: CLEAN | 0 non-info finding(s)
+verdict: CLEAN | 0 non-info finding(s), 1 note(s)
 ```
+
+## GitHub Action
+
+`action.yml` is a composite action. It resolves the diff itself (the PR base
+diff, or `HEAD~1..HEAD`), runs the audit, writes the result to the job summary,
+and can post it as a PR comment.
+
+```yaml
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }
+
+- name: Run the tests
+  id: tests
+  continue-on-error: true
+  run: pytest -q 2>&1 | tee pytest.log
+
+- uses: ./claimcheck
+  with:
+    report: AGENT_REPORT.md
+    test-log: pytest.log
+    test-exit-code: ${{ steps.tests.outcome == 'success' && '0' || '1' }}
+    fail-on: suspicious
+    post-comment: "true"
+```
+
+Inputs: `report`, `diff`, `test-log`, `test-exit-code`, `fail-on`,
+`working-directory`, `python-version`, `post-comment`. Outputs: `worst`,
+`clean`. The audit step reports the finding rather than crashing on it, so the
+job fails with the audit summary attached instead of an opaque exit code.
 
 ## Tests
 
-56 tests, all offline and deterministic. `tests/fixtures/golden/` holds one
+67 tests, all offline and deterministic. `tests/fixtures/golden/` holds one
 fixture set per failure mode, so each detection rule is pinned to a concrete
 input rather than to a described behaviour.
 

@@ -105,7 +105,11 @@ def extract(text: str) -> ClaimSet:
     paragraphs = [p for p in re.split(r"\n\s*\n", text) if p.strip()]
     result.paragraphs = len(paragraphs)
 
-    seen: set[tuple[str, str]] = set()
+    seen: dict[str, Claim] = {}
+    # When two patterns match the same sentence, keep the more specific kind:
+    # "59 tests passing" is a counted claim, not a generic one.
+    specificity = {"tests_pass_counted": 2, "coverage": 1}
+
     for line_number, line in enumerate(lines, 1):
         if BOILERPLATE.match(line.strip()):
             result.boilerplate_lines += 1
@@ -114,20 +118,23 @@ def extract(text: str) -> ClaimSet:
         for sentence in split_sentences(line):
             result.sentences += 1
             for pattern, kind, description in CLAIM_PATTERNS:
-                if pattern.search(sentence):
-                    # Dedup on a punctuation-insensitive key so "All tests pass."
-                    # and "All tests pass" are one claim, not two.
-                    normalized = re.sub(r"[^a-z0-9 ]+", "", sentence.strip().lower()).strip()
-                    key = (kind, normalized)
-                    if key in seen:
+                if not pattern.search(sentence):
+                    continue
+                # Dedup on the sentence, not on (kind, sentence): one sentence is
+                # one claim even when several patterns match it.
+                normalized = re.sub(r"[^a-z0-9 ]+", "", sentence.strip().lower()).strip()
+                existing = seen.get(normalized)
+                if existing is not None:
+                    if specificity.get(kind, 0) > specificity.get(existing.kind, 0):
+                        result.claims.remove(existing)
+                    else:
                         continue
-                    seen.add(key)
-                    result.claims.append(
-                        Claim(
-                            kind=kind,
-                            description=description,
-                            sentence=sentence.strip()[:280],
-                            line_number=line_number,
-                        )
-                    )
+                claim = Claim(
+                    kind=kind,
+                    description=description,
+                    sentence=sentence.strip()[:280],
+                    line_number=line_number,
+                )
+                seen[normalized] = claim
+                result.claims.append(claim)
     return result
